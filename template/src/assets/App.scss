@@ -1,0 +1,97 @@
+@use 'sass:math';
+
+$font-size-root: 16px;
+$atom: 8px;
+
+// Return a value without its unit
+@function trim-unit($value) {
+  @return math.div($value, $value * 0 + 1);
+}
+
+// Convert pixel values into rem values
+@function rem($value) {
+  @return math.div(trim-unit($value), trim-unit($font-size-root)) * 1rem;
+}
+
+.App {
+  text-align: center;
+}
+
+.App-vitamin {
+  color: var(--vtmn-semantic-color_content-action);
+}
+
+.App-icon {
+  display: flex;
+  justify-content: center;
+}
+
+.App-body {
+  display: flex;
+  justify-content: center;
+  gap: $atom * 2;
+}
+
+.App-topic {
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+}
+
+.About {
+  display: flex;
+  padding: $atom * 4;
+  justify-content: center;
+  margin: $atom * 4;
+}
+
+.Card {
+  width: 60%;
+  margin: $atom * 4 auto;
+  padding: $atom * 4;
+  background-color: white;
+  display: flex;
+  flex-flow: column nowrap;
+  position: relative;
+  border-radius: $atom * 3;
+  overflow: hidden;
+  box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.2);
+  justify-content: center;
+}
+
+a {
+  text-decoration: none;
+
+  button {
+    border: none;
+  }
+}
+
+.env-ribbon {
+  position: fixed;
+  width: rem(100);
+  height: rem(100);
+  top: 0;
+  left: 0;
+  z-index: 1020;
+  pointer-events: none;
+  overflow: hidden;
+
+  span {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: rem(180);
+    background-color: $vtmn-color_orange;
+    white-space: nowrap;
+    font-weight: 700;
+    font-size: rem(12);
+    line-height: rem(24);
+    text-align: center;
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.25);
+    transform: rotate(-45deg) translate(rem(24), rem(-24));
+    transform-origin: right center;
+    text-transform: uppercase;
+    color: $vtmn-color_white;
+  }
+}

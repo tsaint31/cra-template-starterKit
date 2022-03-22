@@ -1,0 +1,15 @@
+{
+  "recommendations": [
+    "EditorConfig.EditorConfig",
+    "rvest.vs-code-prettier-eslint",
+    "dbaeumer.vscode-eslint",
+    "eamodio.gitlens",
+    "oderwat.indent-rainbow",
+    "coenraads.bracket-pair-colorizer",
+    "britesnow.vscode-toggle-quotes",
+    "vincaslt.highlight-matching-tag",
+    "aaron-bond.better-comments",
+    "mhutchie.git-graph",
+    "sonarsource.sonarlint-vscode"
+  ]
+}

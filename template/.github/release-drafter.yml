@@ -1,0 +1,21 @@
+categories:
+  - title: '🚀 Features'
+    labels:
+      - 'feature'
+  - title: '🐛 Bug Fixes'
+    labels:
+      - 'bug'
+  - title: '💻 Tech work'
+    labels:
+      - 'tech'
+  - title: '🧰 Refacto'
+    labels:
+      - 'refacto'
+  - title: '⬆️ Upgrades'
+    labels:
+      - 'dependencies'
+template: |
+  ## What’s Changed
+  _Please fill here what you want to highlight in this release_
+
+  $CHANGES

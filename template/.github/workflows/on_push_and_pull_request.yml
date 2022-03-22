@@ -1,0 +1,205 @@
+#Build, scan with Prisma, run tests and sonar on php and push Docker Images to Google Artifact Registry
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+      - develop
+
+name: Build, scan and push Docker images to Google Artifact Registry
+
+jobs:
+  #       ___       _______  .___  ___.  __  .__   __.
+  #      /   \     |       \ |   \/   | |  | |  \ |  |
+  #     /  ^  \    |  .--.  ||  \  /  | |  | |   \|  |
+  #    /  /_\  \   |  |  |  ||  |\/|  | |  | |  . `  |
+  #   /  _____  \  |  '--'  ||  |  |  | |  | |  |\   |
+  #  /__/     \__\ |_______/ |__|  |__| |__| |__| \__|
+  #
+  build-scan-and-push-image:
+    timeout-minutes: 30
+    runs-on: linux
+    env:
+      NAMESPACE: docker
+      IMAGE: my-app
+      CONTAINER_NAME: my-app-${{ github.sha }}
+    steps:
+      - name: Github infos
+        run: echo "Event ${{ github.event_name }} - Ref ${{ github.ref }}"
+
+      - name: Prep cleanup test container
+        run: |
+          if [ "$(docker ps -a -q --filter ancestor=image-test)" ]; then
+              docker rm $(docker stop $(docker ps -a -q --filter ancestor=image-test --format="{{.ID}}"))
+          fi
+
+      - name: Change permissions
+        run: |
+          sudo chmod 777 -R /home/runner/actions-runner/_work/my-app/
+
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Generate Tag
+        id: genTag
+        run: |
+          branch=${GITHUB_REF##*/}
+          ts=$(date +%F.%H%M%S)
+          sha=${GITHUB_SHA::8}
+          echo "::set-output name=TAG::${branch}-${ts}-${sha}"
+
+      - name: Install
+        run: |
+          docker build -f Dockerfile-local . -t image-test
+          docker run -d --name=$CONTAINER_NAME image-test
+
+      - name: Run tests
+        run: |
+          echo ${GITHUB_REF}
+          docker exec -t $CONTAINER_NAME npm run tests:cover
+          docker cp $CONTAINER_NAME:/usr/src/app/coverage ./coverage
+          sed -i 's|/usr/src/app|.|g' ./coverage/lcov.info
+
+      - name: Analyze with SonarCloud
+        if: ${{ github.actor != 'dependabot[bot]' }}
+        uses: sonarsource/sonarcloud-github-action@master
+        with:
+          args: -Dproject.settings=./.sonarcloud.properties
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      - name: Build
+        run: |
+          docker exec -t $CONTAINER_NAME npm run build
+          docker cp $CONTAINER_NAME:/usr/src/app/build ./build
+
+      - name: Run lint
+        run: |
+          docker exec -t $CONTAINER_NAME npm run lint
+
+      - name: Run Cypress tests develop
+        continue-on-error: true
+        if: |
+          (github.event_name == 'push' && github.ref == 'refs/heads/develop') ||
+          (github.event_name == 'pull_request' && github.ref == 'refs/pull/<pr-number-to-test-staging>/merge')
+        run: |
+          docker exec -t $CONTAINER_NAME sed -i -e "s/http:\/\/183.20.128.3\/api\//https:\/\/api-global.preprod.decathlon.net\/co_creation\//g" ./public/config.js
+          docker exec -t $CONTAINER_NAME npm run start & docker exec -t $CONTAINER_NAME npx wait-on http://localhost:3000
+          docker exec -t $CONTAINER_NAME npm run cy:run:git:stg
+
+      - name: Run Cypress tests master
+        continue-on-error: true
+        if:
+          (github.event_name == 'push' && github.ref == 'refs/heads/master') ||
+          (github.event_name == 'pull_request' && github.ref == 'refs/pull/<pr-number-to-test-preprod>/merge')
+        run: |
+          docker exec -t $CONTAINER_NAME sed -i -e "s/http:\/\/183.20.128.3\/api\//https:\/\/api-global.preprod.decathlon.net\/co_creation\//g" ./public/config.js
+          docker exec -t $CONTAINER_NAME sed -i -e "s/staging-gcp/preprod-gcp/g" ./public/config.js
+          docker exec -t $CONTAINER_NAME npm run start & docker exec -t $CONTAINER_NAME npx wait-on http://localhost:3000
+          docker exec -t $CONTAINER_NAME npm run cy:run:git:ppd
+
+      - name: Post cleanup test container
+        run: |
+          if [ "$(docker ps -q -f name=$CONTAINER_NAME)" ]; then
+            docker stop $CONTAINER_NAME && docker rm $CONTAINER_NAME
+          fi
+
+      - name: Build image
+        run: |
+          branch=${GITHUB_REF##*/}
+          gref=${GITHUB_REF}
+          if [ $branch == develop ]; then IMAGE=my-app-stg; fi
+          if [ $branch == master ]; then IMAGE=my-app-ppd; fi
+          if [ $gref == 'refs/pull/<pr-number-to-deploy>/merge' ]; then IMAGE=my-app-stg; fi
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+          docker build . -t $IMAGE
+
+      - name: Tag image
+        if: ${{ github.actor != 'dependabot[bot]' }}
+        run: |
+          docker image tag $IMAGE europe-west4-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/$NAMESPACE/$IMAGE:${{ steps.genTag.outputs.TAG }}
+          docker image tag $IMAGE europe-west4-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/$NAMESPACE/$IMAGE:latest
+
+      - name: Download Prisma
+        if: ${{ github.actor != 'dependabot[bot]' }}
+        run: |
+          curl -k -u ${{ secrets.PRISMA_USER }}:${{ secrets.PRISMA_PASS }} --output ./twistcli https://europe-west3.cloud.twistlock.com/eu-2-143541184/api/v1/util/twistcli
+          chmod a+x ./twistcli
+
+      - name: Scan image with Prisma
+        if: ${{ github.actor != 'dependabot[bot]' }}
+        id: prisma
+        run: |
+          curl -o /tmp/ansi2html.sh https://raw.githubusercontent.com/pixelb/scripts/master/scripts/ansi2html.sh
+          chmod +x /tmp/ansi2html.sh
+          ./twistcli images scan --details --docker-address $DOCKER_HOST --address https://europe-west3.cloud.twistlock.com/eu-2-143541184 -u ${{ secrets.PRISMA_USER }} -p ${{ secrets.PRISMA_PASS }} europe-west4-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/$NAMESPACE/$IMAGE:${{ steps.genTag.outputs.TAG }} > /tmp/report.txt
+          cat /tmp/report.txt
+          text=$(cat /tmp/report.txt | sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2})?)?[mGK]//g" | sed -r "s/ /%20/g")
+          echo ::set-output name=stdout::${text//$'\n'/%0A}
+
+      - name: Find Current Pull Request in Github
+        if: |
+          github.event_name == 'push' ||
+          (github.event_name == 'pull_request' && github.ref == 'refs/pull/<pr-number-to-deploy>/merge')
+        uses: jwalton/gh-find-current-pr@v1
+        id: findPr
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add comment on Pull Request with Prisma outputs
+        continue-on-error: true
+        if: github.event_name == 'push'
+        uses: actions/github-script@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            var reportBulk = `${{ steps.prisma.outputs.stdout }}`;
+            const expr=/%20/g
+            var report = reportBulk.replace(expr," ");
+            const output = `#### Prisma Scan on API image 📖\`${{ steps.prisma.outcome }}\`
+            <details><summary>Show Prisma Scan Results</summary>
+
+            \`\`\`terraform
+            ` + report +`
+            \`\`\`
+
+            </details>
+            *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+            number = ${{ steps.findPr.outputs.number || -1 }};
+            if (number !== -1)
+            github.issues.createComment({
+              issue_number: number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })
+
+      - name: Configure gcloud
+        if: |
+          github.event_name == 'push' ||
+          (github.event_name == 'pull_request' && github.ref == 'refs/pull/<pr-number-to-deploy>/merge')
+        uses: google-github-actions/setup-gcloud@master
+        with:
+          version: '290.0.1'
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          service_account_key: ${{ secrets.GCP_GAR_SA_KEY }}
+          export_default_credentials: true
+
+      - name: Push image to google registry
+        if: |
+          github.event_name == 'push' ||
+          (github.event_name == 'pull_request' && github.ref == 'refs/pull/<pr-number-to-deploy>/merge')
+        run: |
+          gcloud auth configure-docker europe-west4-docker.pkg.dev --quiet
+          docker push europe-west4-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/$NAMESPACE/$IMAGE:${{ steps.genTag.outputs.TAG }}
+          docker push europe-west4-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/$NAMESPACE/$IMAGE:latest
+
+      - name: clean
+        uses: docker://centos
+        if: ${{ always() }}
+        continue-on-error: true
+        with:
+          args: '/bin/rm /github/workspace -rf'
