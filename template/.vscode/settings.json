@@ -6,6 +6,6 @@
     "source.fixAll.eslint": true
   },
   "sonarlint.connectedMode.project": {
-    "projectKey": "dktunited_my_app"
+    "projectKey": "tsaint31_my_app"
   }
 }

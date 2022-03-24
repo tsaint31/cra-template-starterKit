@@ -35,7 +35,7 @@ You can simply contact us and ask your question at tanguy.muselet@decathlon.com
 
 ### Reporting Bug
 
-The first way to contribute to a project is simply reporting a Bug. If you find anything which is not working well or as expected you can open an Issue in the [creation-core-components](https://github.com/dktunited/creation-core-components/issues) repository.
+The first way to contribute to a project is simply reporting a Bug. If you find anything which is not working well or as expected you can open an Issue in the [cra-template-starterkit](https://github.com/tsaint31/cra-template-starterkit/issues) repository.
 
 Before to open the issue please check if there is one similar already opened on the creation-core-components repository. It will save us hours of work and it will allow us to answer you quickly with the desired hotfix.
 
@@ -92,7 +92,3 @@ To reach this goal we fixed some rule in our team and we would love to go ahead 
 5. After you proposed the PullRequest, our CI/CD platform will execute all the steps. If you find any automatic comment on the Pull Request you opened, it means there is something which is not respecting the project defined code style or your broke any previously created test. Please fix this error if you want us to test your PR.
 
 If you respect all these rules you will help us saving time and we will be able to check your pull request faster.
-
-## Attribution
-
-This Contributing file is fully inspirated and adapted from the [OnePay project one](https://github.com/dktunited/onepay-api/blob/develop/CONTRIBUTING.md), thanks to them!
