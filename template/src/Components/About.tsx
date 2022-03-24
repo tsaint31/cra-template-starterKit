@@ -26,15 +26,6 @@ export const About = () => {
           <li>Vitamin Icon</li>
           <li>Vitamin React</li>
         </ul>
-        <p className="vtmn-typo_text-2">
-          <a
-            href="https://wiki.decathlon.net/display/CREATION/React+front+end+stack"
-            target="_blank"
-            rel="noreferrer"
-          >
-            This is based on the React Front end stack wiki page.
-          </a>
-        </p>
       </div>
     </>
   );
